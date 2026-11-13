@@ -33,14 +33,14 @@
             <div class="composer-face" id="composer-face" aria-hidden="true"></div>
             <div>
               <h2 id="composer-title">今日の気分は？</h2>
-              <p class="muted">5段階とひとことで記録します</p>
+              <p class="muted">どの項目も任意です。気分だけ・ひとことだけでも記録できます</p>
             </div>
           </div>
 
           <div class="error-summary" id="error-summary" role="alert" tabindex="-1" hidden></div>
 
           <div class="field" data-field="name">
-            <label for="f-name">名前</label>
+            <label for="f-name">名前 <span class="optional">任意</span></label>
             <input id="f-name" name="name" type="text" autocomplete="off" list="member-list" placeholder="例：さくら" aria-describedby="e-name">
             <datalist id="member-list"></datalist>
             <div class="chips" id="member-chips" aria-label="最近のメンバー"></div>
@@ -48,20 +48,20 @@
           </div>
 
           <div class="field" data-field="date">
-            <label for="f-date">日付</label>
+            <label for="f-date">日付 <span class="optional">任意・空欄なら今日</span></label>
             <input id="f-date" name="date" type="date" aria-describedby="e-date">
             <p class="field-error" id="e-date" data-error-for="date"></p>
           </div>
 
           <fieldset class="field" data-field="mood" aria-describedby="e-mood">
-            <legend>気分</legend>
+            <legend>気分 <span class="optional">任意・もう一度押すと選択を外せます</span></legend>
             <div class="mood-picker" id="mood-picker"></div>
             <p class="field-error" id="e-mood" data-error-for="mood"></p>
           </fieldset>
 
           <div class="field" data-field="note">
             <div class="label-row">
-              <label for="f-note">ひとこと</label>
+              <label for="f-note">ひとこと <span class="optional">任意</span></label>
               <span class="counter" id="note-counter" aria-live="polite"></span>
             </div>
             <textarea id="f-note" name="note" rows="3" placeholder="今日はどんな一日でしたか？" aria-describedby="e-note note-counter"></textarea>
@@ -72,7 +72,7 @@
             <span>記録する</span>
             <kbd class="kbd" aria-hidden="true">⌘ Enter</kbd>
           </button>
-          <p class="hint">同じ人・同じ日の記録は上書きされます</p>
+          <p class="hint">同じ人・同じ日の記録は上書きされます（名前なしの記録は毎回追加されます）</p>
         </form>
       </section>
 

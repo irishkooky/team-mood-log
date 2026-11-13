@@ -75,8 +75,21 @@ export function normalizeName(name) {
 
 const sameName = (a, b) => normalizeName(a).toLowerCase() === normalizeName(b).toLowerCase();
 
+/** 気分が記録されているか（気分は任意なので null のこともある） */
+export const hasMood = (mood) => Number.isInteger(mood) && mood >= 1 && mood <= 5;
+
 /**
- * フォームの入力を検証する。
+ * 1人1日1件の「同じ枠」か。名前のない記録は誰のものか分からないので、id が同じときだけ同じとみなす。
+ */
+const sameSlot = (a, b) => {
+  if (!normalizeName(a.name) || !normalizeName(b.name)) return a.id != null && a.id === b.id;
+  return a.date === b.date && sameName(a.name, b.name);
+};
+
+/**
+ * フォームの入力を検証する。項目はすべて任意。
+ * 日付が空なら today、気分が空なら null、名前・ひとことが空なら '' になる。
+ * ただし名前・気分・ひとことがすべて空の記録は作らない。
  * 成功: { ok: true, errors: {}, value: { name, date, mood, note } }
  * 失敗: { ok: false, errors: { name?, date?, mood?, note? } }（値は画面に出すメッセージ）
  */
@@ -84,24 +97,26 @@ export function validateEntry(input, { today }) {
   const errors = {};
 
   const name = normalizeName(input.name);
-  if (!name) errors.name = '名前を入力してください';
-  else if (charLength(name) > LIMITS.name) errors.name = `名前は${LIMITS.name}文字以内で入力してください`;
+  if (charLength(name) > LIMITS.name) errors.name = `名前は${LIMITS.name}文字以内で入力してください`;
 
-  const date = input.date;
-  if (!date) errors.date = '日付を選んでください';
-  else if (!isDateKey(date)) errors.date = '日付の形式が正しくありません';
+  const date = input.date || today;
+  if (!isDateKey(date)) errors.date = '日付の形式が正しくありません';
   else if (date > today) errors.date = '未来の日付には記録できません';
 
-  const mood = Number(input.mood);
-  if (input.mood === '' || input.mood == null || !Number.isInteger(mood) || mood < 1 || mood > 5) {
-    errors.mood = '気分を5段階から選んでください';
+  let mood = null;
+  if (input.mood !== '' && input.mood != null) {
+    mood = Number(input.mood);
+    if (!hasMood(mood)) errors.mood = '気分は5段階から選んでください';
   }
 
   const note = String(input.note ?? '').trim();
   const noteLength = charLength(note);
-  if (!note) errors.note = 'ひとことを入力してください';
-  else if (noteLength > LIMITS.note) {
+  if (noteLength > LIMITS.note) {
     errors.note = `ひとことは${LIMITS.note}文字以内にしてください（いま${noteLength}文字）`;
+  }
+
+  if (Object.keys(errors).length === 0 && !name && mood === null && !note) {
+    errors.mood = '名前・気分・ひとことのどれかを入力してください';
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
@@ -112,10 +127,10 @@ export function validateEntry(input, { today }) {
 
 /**
  * 記録を追加する。同じメンバー・同じ日の記録があれば上書きする（1人1日1件）。
- * 元の配列は変更しない。
+ * 名前のない記録は上書きせず、毎回新しく追加する。元の配列は変更しない。
  */
 export function upsertEntry(entries, value, { id, now }) {
-  const index = entries.findIndex((e) => e.date === value.date && sameName(e.name, value.name));
+  const index = entries.findIndex((e) => sameSlot(e, value));
   if (index === -1) {
     const entry = { id, ...value, createdAt: now, updatedAt: now };
     return { entries: [...entries, entry], entry, replaced: false };
@@ -133,9 +148,7 @@ export function removeEntry(entries, id) {
 
 /** 削除の取り消し。その間に同じメンバー・同じ日の記録が作られていたら戻さない。 */
 export function restoreEntry(entries, entry) {
-  const conflict = entries.some(
-    (e) => e.id === entry.id || (e.date === entry.date && sameName(e.name, entry.name)),
-  );
+  const conflict = entries.some((e) => e.id === entry.id || sameSlot(e, entry));
   if (conflict) return { entries, restored: false };
   return { entries: [...entries, entry], restored: true };
 }
@@ -152,7 +165,7 @@ export function mergeEntries(entries, incoming, { makeId }) {
 
   for (const raw of incoming) {
     const item = { ...raw, name: normalizeName(raw.name) };
-    const index = next.findIndex((e) => e.date === item.date && sameName(e.name, item.name));
+    const index = next.findIndex((e) => sameSlot(e, item));
     if (index === -1) {
       if (next.some((e) => e.id === item.id)) item.id = makeId();
       next.push(item);
@@ -175,13 +188,13 @@ export function sortEntries(entries) {
   });
 }
 
-/** 記録したことのあるメンバー名（最近記録した順、重複なし） */
+/** 記録したことのあるメンバー名（最近記録した順、重複なし。名前のない記録は含めない） */
 export function knownMembers(entries) {
   const seen = new Set();
   const names = [];
   for (const e of sortEntries(entries)) {
     const key = normalizeName(e.name).toLowerCase();
-    if (seen.has(key)) continue;
+    if (!key || seen.has(key)) continue;
     seen.add(key);
     names.push(e.name);
   }
@@ -197,29 +210,37 @@ export function average(values) {
 
 const inRange = (entries, start, end) => entries.filter((e) => e.date >= start && e.date <= end);
 
-/** key を含む週（月〜日）の集計 */
+/** 気分が記録されているものだけの気分の配列（平均・分布は気分のある記録だけで出す） */
+const moodsOf = (entries) => entries.map((e) => e.mood).filter(hasMood);
+
+/**
+ * key を含む週（月〜日）の集計。
+ * count は記録の件数、rated はそのうち気分が記録されている件数。
+ * members（メンバー × 曜日）には名前のある記録だけが入る。
+ */
 export function summarizeWeek(entries, key) {
   const days = weekDays(key);
   const start = days[0];
   const end = days[6];
   const weekEntries = inRange(entries, start, end);
+  const moods = moodsOf(weekEntries);
 
   const distribution = [0, 0, 0, 0, 0];
-  for (const e of weekEntries) distribution[e.mood - 1] += 1;
+  for (const mood of moods) distribution[mood - 1] += 1;
 
   const names = knownMembers(weekEntries).sort((a, b) => a.localeCompare(b, 'ja'));
   const members = names.map((name) => {
     const own = weekEntries.filter((e) => sameName(e.name, name));
     return {
       name,
-      average: average(own.map((e) => e.mood)),
+      average: average(moodsOf(own)),
       days: days.map((d) => own.find((e) => e.date === d) ?? null),
     };
   });
 
   const byDay = days.map((date) => {
-    const moods = weekEntries.filter((e) => e.date === date).map((e) => e.mood);
-    return { date, count: moods.length, average: average(moods) };
+    const dayMoods = moodsOf(weekEntries.filter((e) => e.date === date));
+    return { date, count: dayMoods.length, average: average(dayMoods) };
   });
 
   const best = byDay
@@ -231,7 +252,8 @@ export function summarizeWeek(entries, key) {
     end,
     days,
     count: weekEntries.length,
-    average: average(weekEntries.map((e) => e.mood)),
+    rated: moods.length,
+    average: average(moods),
     distribution,
     members,
     byDay,
@@ -247,7 +269,7 @@ export function summarizeWeek(entries, key) {
 export function weeklyTrend(entries, key, weeks = 8) {
   const last = startOfWeek(key);
   const weekAverage = (start) => {
-    const moods = inRange(entries, start, addDays(start, 6)).map((e) => e.mood);
+    const moods = moodsOf(inRange(entries, start, addDays(start, 6)));
     return { count: moods.length, average: average(moods) };
   };
 

@@ -78,10 +78,22 @@ describe('validateEntry', () => {
     assert.deepEqual(r.value, { name: 'さくら', date: TODAY, mood: 4, note: 'いい日' });
   });
 
-  test('空の入力はすべての項目でエラーになる', () => {
-    const r = validateEntry({ name: ' ', date: '', mood: '', note: '' }, { today: TODAY });
+  test('どの項目も任意（空の項目は既定値になる）', () => {
+    const onlyMood = validateEntry({ name: ' ', date: '', mood: '3', note: '' }, { today: TODAY });
+    assert.equal(onlyMood.ok, true);
+    assert.deepEqual(onlyMood.value, { name: '', date: TODAY, mood: 3, note: '' });
+
+    const onlyNote = validateEntry({ name: '', date: '2026-11-10', mood: '', note: ' つかれた ' }, { today: TODAY });
+    assert.deepEqual(onlyNote.value, { name: '', date: '2026-11-10', mood: null, note: 'つかれた' });
+
+    const onlyName = validateEntry({ name: 'さくら', date: '', mood: null, note: '' }, { today: TODAY });
+    assert.deepEqual(onlyName.value, { name: 'さくら', date: TODAY, mood: null, note: '' });
+  });
+
+  test('名前・気分・ひとことがすべて空なら記録しない', () => {
+    const r = validateEntry({ name: ' ', date: '', mood: '', note: '  ' }, { today: TODAY });
     assert.equal(r.ok, false);
-    assert.deepEqual(Object.keys(r.errors).sort(), ['date', 'mood', 'name', 'note']);
+    assert.deepEqual(Object.keys(r.errors), ['mood']);
     assert.equal(r.value, undefined);
   });
 
@@ -95,14 +107,17 @@ describe('validateEntry', () => {
     assert.match(r.errors.date, /形式/);
   });
 
-  test('気分は1〜5の整数だけ', () => {
-    for (const mood of ['0', '6', '2.5', 'abc', null, undefined]) {
+  test('気分は入力するなら1〜5の整数だけ', () => {
+    for (const mood of ['0', '6', '2.5', 'abc']) {
       const r = validateEntry({ ...valid, mood }, { today: TODAY });
       assert.equal(r.ok, false, `mood=${mood}`);
       assert.ok(r.errors.mood);
     }
     assert.equal(validateEntry({ ...valid, mood: 1 }, { today: TODAY }).ok, true);
     assert.equal(validateEntry({ ...valid, mood: 5 }, { today: TODAY }).ok, true);
+    for (const mood of ['', null, undefined]) {
+      assert.equal(validateEntry({ ...valid, mood }, { today: TODAY }).value.mood, null, `mood=${mood}`);
+    }
   });
 
   test('文字数の上限は文字単位（絵文字も1文字）で数える', () => {
@@ -175,6 +190,25 @@ describe('記録の追加・削除', () => {
     assert.equal(r.entries[0].note, '再記録');
   });
 
+  test('名前のない記録は上書きせず毎回追加する', () => {
+    const entries = build([
+      ['', TODAY, 3],
+      ['', TODAY, 4],
+      ['さくら', TODAY, 5],
+    ]);
+    assert.equal(entries.length, 3);
+    assert.deepEqual(knownMembers(entries), ['さくら']);
+  });
+
+  test('名前のない記録の削除は取り消せる（同じ日に別の名前なし記録があっても）', () => {
+    const entries = build([['', TODAY, 3]]);
+    const { entries: after, removed } = removeEntry(entries, entries[0].id);
+    const another = upsertEntry(after, { name: '', date: TODAY, mood: 1, note: '' }, opts()).entries;
+    const r = restoreEntry(another, removed);
+    assert.equal(r.restored, true);
+    assert.equal(r.entries.length, 2);
+  });
+
   test('並び順は新しい日付が先', () => {
     const entries = build([['a', '2026-11-10', 3], ['b', '2026-11-12', 3], ['c', '2026-11-11', 3]]);
     assert.deepEqual(sortEntries(entries).map((e) => e.date), ['2026-11-12', '2026-11-11', '2026-11-10']);
@@ -218,6 +252,28 @@ describe('集計', () => {
     assert.equal(s.byDay[2].average, null);
     assert.equal(s.bestDay.date, '2026-11-09');
     assert.deepEqual(s.entries.map((e) => e.date), ['2026-11-15', '2026-11-10', '2026-11-10', '2026-11-09']);
+  });
+
+  test('気分のない記録は件数に入るが、平均・分布には入らない。名前のない記録はメンバーに出ない', () => {
+    const entries = build([
+      ['さくら', '2026-11-09', 4],
+      ['さくら', '2026-11-10', null, 'ひとことだけ'],
+      ['', '2026-11-10', 2],
+      ['', '2026-11-11', null],
+    ]);
+    const s = summarizeWeek(entries, TODAY);
+    assert.equal(s.count, 4);
+    assert.equal(s.rated, 2);
+    assert.equal(s.average, 3);
+    assert.deepEqual(s.distribution, [0, 1, 0, 1, 0]);
+    assert.deepEqual(s.members.map((m) => m.name), ['さくら']);
+    assert.equal(s.members[0].average, 4);
+    assert.equal(s.members[0].days[1].mood, null);
+    assert.deepEqual(s.byDay[1], { date: '2026-11-10', count: 1, average: 2 });
+    assert.equal(s.byDay[2].average, null);
+
+    const t = weeklyTrend(entries, TODAY, 1);
+    assert.deepEqual(t[0], { start: '2026-11-09', count: 2, average: 3, delta: null });
   });
 
   test('記録のない週は平均 null・空のメンバー', () => {
@@ -291,6 +347,16 @@ describe('読み込んだ記録のマージ', () => {
     const ids = r.entries.map((e) => e.id);
     assert.equal(new Set(ids).size, 2);
     assert.ok(ids.includes('a'));
+  });
+
+  test('名前のない記録は id が同じときだけ同じ記録とみなす', () => {
+    const current = [rec('a', '', '2026-11-12', 4, 'T1')];
+    const r = mergeEntries(current, [rec('a', '', '2026-11-12', 2, 'T2'), rec('b', '', '2026-11-12', 3, 'T1')], { makeId });
+    assert.deepEqual([r.added, r.updated, r.unchanged], [1, 1, 0]);
+    assert.deepEqual(r.entries.map((e) => [e.id, e.mood]), [['a', 2], ['b', 3]]);
+
+    const again = mergeEntries(r.entries, [rec('b', '', '2026-11-12', 3, 'T1')], { makeId });
+    assert.equal(again.entries.length, 2);
   });
 
   test('同じファイルを2回読み込んでも増えない', () => {

@@ -43,6 +43,12 @@ describe('保存と読み込み', () => {
     assert.equal(r.recovered, true);
   });
 
+  test('名前・ひとことが空、気分が null の記録も保存・読み込みできる', () => {
+    const blank = { ...entry, id: 'z', name: '', mood: null, note: '' };
+    assert.deepEqual(deserialize(serialize([entry, blank])), { entries: [entry, blank], recovered: false });
+    assert.deepEqual(parseImport(serialize([blank])).entries, [blank]);
+  });
+
   test('serialize はバージョンつき', () => {
     assert.deepEqual(JSON.parse(serialize([entry])), { version: 1, entries: [entry] });
   });
