@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>チームの気分ログ</title>
+  <meta name="description" content="メンバーが毎日の気分を5段階とひとことで記録し、週ごとの傾向を見るアプリ">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23f5bd4f'/%3E%3Ccircle cx='14.5' cy='17' r='2.2' fill='%232b2520'/%3E%3Ccircle cx='25.5' cy='17' r='2.2' fill='%232b2520'/%3E%3Cpath d='M13 24.5 Q20 30 27 24.5' stroke='%232b2520' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="masthead">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">Team Mood Log</p>
+          <h1>チームの気分ログ</h1>
+        </div>
+      </div>
+      <p class="today" id="today"></p>
+    </header>
+
+    <div id="banner" class="banner" role="status" hidden></div>
+
+    <main class="layout">
+      <section class="composer card" aria-labelledby="composer-title">
+        <form id="entry-form" novalidate>
+          <div class="composer-head">
+            <div class="composer-face" id="composer-face" aria-hidden="true"></div>
+            <div>
+              <h2 id="composer-title">今日の気分は？</h2>
+              <p class="muted">5段階とひとことで記録します</p>
+            </div>
+          </div>
+
+          <div class="error-summary" id="error-summary" role="alert" tabindex="-1" hidden></div>
+
+          <div class="field" data-field="name">
+            <label for="f-name">名前</label>
+            <input id="f-name" name="name" type="text" autocomplete="off" list="member-list" placeholder="例：さくら" aria-describedby="e-name">
+            <datalist id="member-list"></datalist>
+            <div class="chips" id="member-chips" aria-label="最近のメンバー"></div>
+            <p class="field-error" id="e-name" data-error-for="name"></p>
+          </div>
+
+          <div class="field" data-field="date">
+            <label for="f-date">日付</label>
+            <input id="f-date" name="date" type="date" aria-describedby="e-date">
+            <p class="field-error" id="e-date" data-error-for="date"></p>
+          </div>
+
+          <fieldset class="field" data-field="mood" aria-describedby="e-mood">
+            <legend>気分</legend>
+            <div class="mood-picker" id="mood-picker"></div>
+            <p class="field-error" id="e-mood" data-error-for="mood"></p>
+          </fieldset>
+
+          <div class="field" data-field="note">
+            <div class="label-row">
+              <label for="f-note">ひとこと</label>
+              <span class="counter" id="note-counter" aria-live="polite"></span>
+            </div>
+            <textarea id="f-note" name="note" rows="3" placeholder="今日はどんな一日でしたか？" aria-describedby="e-note note-counter"></textarea>
+            <p class="field-error" id="e-note" data-error-for="note"></p>
+          </div>
+
+          <button class="btn btn-primary btn-block" type="submit">
+            <span>記録する</span>
+            <kbd class="kbd" aria-hidden="true">⌘ Enter</kbd>
+          </button>
+          <p class="hint">同じ人・同じ日の記録は上書きされます</p>
+        </form>
+      </section>
+
+      <section class="dashboard" id="dashboard" aria-live="polite"></section>
+    </main>
+
+    <footer class="footer">
+      <p>記録はこのブラウザ（localStorage）にだけ保存されます。サーバーには送信しません。</p>
+      <div class="footer-actions">
+        <button class="btn btn-ghost btn-small" type="button" data-action="export">JSONで書き出す</button>
+        <button class="btn btn-ghost btn-small btn-danger-ghost" type="button" data-action="clear">すべて消去</button>
+      </div>
+    </footer>
+  </div>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
