@@ -36,6 +36,25 @@ export function deserialize(raw) {
   }
 }
 
+/**
+ * 書き出した JSON ファイルの中身を読む（記録の配列だけのファイルも受け付ける）。
+ * 成功: { ok: true, entries, skipped }（skipped は読めずに飛ばした件数）
+ * 失敗: { ok: false, error }（error は画面に出すメッセージ）
+ */
+export function parseImport(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'JSON として読み込めませんでした' };
+  }
+  const list = Array.isArray(data) ? data : data?.entries;
+  if (!Array.isArray(list)) return { ok: false, error: '気分ログの書き出しファイルではないようです' };
+  const entries = list.filter(isStoredEntry);
+  if (entries.length === 0) return { ok: false, error: '読み込める記録が見つかりませんでした' };
+  return { ok: true, entries, skipped: list.length - entries.length };
+}
+
 export function createStore(storage) {
   return {
     /** unavailable: localStorage が使えない（プライベートモードなど） */

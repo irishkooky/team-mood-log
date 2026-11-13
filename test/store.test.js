@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createStore, deserialize, serialize, STORAGE_KEY } from '../src/store.js';
+import { createStore, deserialize, parseImport, serialize, STORAGE_KEY } from '../src/store.js';
 import { createSampleEntries } from '../src/sample.js';
 import { isDateKey } from '../src/core.js';
 
@@ -73,5 +73,30 @@ describe('サンプルデータ', () => {
     }
     // 読み書きで壊れないこと
     assert.equal(deserialize(serialize(entries)).entries.length, entries.length);
+  });
+});
+
+describe('JSON ファイルの読み込み', () => {
+  test('書き出したファイルをそのまま読める', () => {
+    assert.deepEqual(parseImport(serialize([entry])), { ok: true, entries: [entry], skipped: 0 });
+  });
+
+  test('記録の配列だけのファイルも受け付ける', () => {
+    assert.deepEqual(parseImport(JSON.stringify([entry])).entries, [entry]);
+  });
+
+  test('不正な記録は飛ばして件数を返す', () => {
+    const r = parseImport(JSON.stringify({ entries: [entry, { ...entry, id: 'b', mood: 0 }, 'x'] }));
+    assert.equal(r.ok, true);
+    assert.equal(r.entries.length, 1);
+    assert.equal(r.skipped, 2);
+  });
+
+  test('読めないファイルは理由つきで失敗する', () => {
+    assert.equal(parseImport('{oops').ok, false);
+    assert.equal(parseImport('{"foo": 1}').ok, false);
+    assert.equal(parseImport('null').ok, false);
+    assert.equal(parseImport(JSON.stringify({ entries: [{ id: 1 }] })).ok, false);
+    assert.equal(typeof parseImport('{oops').error, 'string');
   });
 });

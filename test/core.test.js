@@ -12,6 +12,7 @@ import {
   upsertEntry,
   removeEntry,
   restoreEntry,
+  mergeEntries,
   sortEntries,
   knownMembers,
   average,
@@ -248,5 +249,55 @@ describe('集計', () => {
     const t = weeklyTrend(entries, TODAY, 3);
     assert.deepEqual(t.map((p) => p.average), [3, null, 4]);
     assert.deepEqual(t.map((p) => p.delta), [null, null, null]);
+  });
+});
+
+describe('読み込んだ記録のマージ', () => {
+  const rec = (id, name, date, mood, updatedAt) => ({ id, name, date, mood, note: 'メモ', createdAt: updatedAt, updatedAt });
+  let n = 0;
+  const makeId = () => `new-${++n}`;
+
+  test('重ならない記録は追加し、元の配列は変更しない', () => {
+    const current = [rec('a', 'さくら', '2026-11-12', 4, 'T1')];
+    const r = mergeEntries(current, [rec('b', 'たろう', '2026-11-12', 2, 'T1')], { makeId });
+    assert.equal(r.entries.length, 2);
+    assert.deepEqual([r.added, r.updated, r.unchanged], [1, 0, 0]);
+    assert.equal(current.length, 1);
+  });
+
+  test('同じメンバー・同じ日は更新が新しいほうを残し、id は今のものを保つ', () => {
+    const current = [rec('a', 'さくら', '2026-11-12', 4, 'T2')];
+    const newer = mergeEntries(current, [rec('x', ' さくら ', '2026-11-12', 1, 'T3')], { makeId });
+    assert.deepEqual([newer.added, newer.updated], [0, 1]);
+    assert.equal(newer.entries.length, 1);
+    assert.equal(newer.entries[0].id, 'a');
+    assert.equal(newer.entries[0].mood, 1);
+
+    const older = mergeEntries(current, [rec('x', 'さくら', '2026-11-12', 1, 'T1')], { makeId });
+    assert.deepEqual([older.added, older.updated, older.unchanged], [0, 0, 1]);
+    assert.equal(older.entries[0].mood, 4);
+  });
+
+  test('大文字小文字や空白の違いも同じメンバーとみなす', () => {
+    const current = [rec('a', 'Sakura', '2026-11-12', 4, 'T1')];
+    const r = mergeEntries(current, [rec('b', '  sakura ', '2026-11-12', 5, 'T2')], { makeId });
+    assert.equal(r.entries.length, 1);
+    assert.equal(r.updated, 1);
+  });
+
+  test('別の記録と id がぶつかったら振り直す', () => {
+    const current = [rec('a', 'さくら', '2026-11-12', 4, 'T1')];
+    const r = mergeEntries(current, [rec('a', 'たろう', '2026-11-11', 3, 'T1')], { makeId });
+    const ids = r.entries.map((e) => e.id);
+    assert.equal(new Set(ids).size, 2);
+    assert.ok(ids.includes('a'));
+  });
+
+  test('同じファイルを2回読み込んでも増えない', () => {
+    const file = [rec('a', 'さくら', '2026-11-12', 4, 'T1'), rec('b', 'たろう', '2026-11-12', 2, 'T1')];
+    const once = mergeEntries([], file, { makeId });
+    const twice = mergeEntries(once.entries, file, { makeId });
+    assert.equal(twice.entries.length, 2);
+    assert.deepEqual([twice.added, twice.updated, twice.unchanged], [0, 0, 2]);
   });
 });
