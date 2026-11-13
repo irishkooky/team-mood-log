@@ -140,6 +140,33 @@ export function restoreEntry(entries, entry) {
   return { entries: [...entries, entry], restored: true };
 }
 
+/**
+ * 読み込んだ記録を今の記録にまぜる。1人1日1件を保ち、同じメンバー・同じ日が重なったら更新が新しいほうを残す。
+ * 別の記録と id がぶつかったときは makeId で振り直す。元の配列は変更しない。
+ */
+export function mergeEntries(entries, incoming, { makeId }) {
+  const next = entries.slice();
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+
+  for (const raw of incoming) {
+    const item = { ...raw, name: normalizeName(raw.name) };
+    const index = next.findIndex((e) => e.date === item.date && sameName(e.name, item.name));
+    if (index === -1) {
+      if (next.some((e) => e.id === item.id)) item.id = makeId();
+      next.push(item);
+      added += 1;
+    } else if (String(item.updatedAt ?? '') > String(next[index].updatedAt ?? '')) {
+      next[index] = { ...item, id: next[index].id };
+      updated += 1;
+    } else {
+      unchanged += 1;
+    }
+  }
+  return { entries: next, added, updated, unchanged };
+}
+
 /** 新しい日付順、同じ日なら更新が新しい順 */
 export function sortEntries(entries) {
   return entries.slice().sort((a, b) => {

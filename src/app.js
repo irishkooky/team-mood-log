@@ -12,11 +12,12 @@ import {
   upsertEntry,
   removeEntry,
   restoreEntry,
+  mergeEntries,
   knownMembers,
   summarizeWeek,
   weeklyTrend,
 } from './core.js';
-import { createStore, serialize } from './store.js';
+import { createStore, serialize, parseImport } from './store.js';
 import { createSampleEntries } from './sample.js';
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日'];
@@ -528,6 +529,7 @@ const actions = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
+  import: () => $('import-file').click(),
   clear: (button) => {
     if (state.entries.length === 0) {
       toast('消去する記録はありません');
@@ -558,6 +560,50 @@ function disarmClear(button) {
   button.classList.remove('is-armed');
   button.textContent = 'すべて消去';
 }
+
+async function importFile(file) {
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    toast('ファイルを読み込めませんでした');
+    return;
+  }
+  const parsed = parseImport(text);
+  if (!parsed.ok) {
+    toast(`読み込めませんでした：${parsed.error}`);
+    return;
+  }
+
+  const backup = state.entries;
+  const { entries, added, updated } = mergeEntries(backup, parsed.entries, { makeId });
+  const skipped = parsed.skipped ? `（読めない${parsed.skipped}件は飛ばしました）` : '';
+  if (added + updated === 0) {
+    toast(`新しい記録はありませんでした${skipped}`);
+    return;
+  }
+  commit(entries);
+  // 空の状態から読み込んだときは、いちばん新しい記録の週を見せる
+  if (backup.length === 0) {
+    const latest = entries.reduce((max, e) => (e.date > max ? e.date : max), entries[0].date);
+    const thisWeek = startOfWeek(todayKey());
+    state.week = latest > thisWeek ? thisWeek : startOfWeek(latest);
+  }
+  render();
+  toast(`${added}件を追加、${updated}件を更新しました${skipped}`, {
+    label: '元に戻す',
+    run: () => {
+      commit(backup);
+      render();
+    },
+  });
+}
+
+$('import-file').addEventListener('change', (event) => {
+  const [file] = event.target.files;
+  event.target.value = '';
+  if (file) importFile(file);
+});
 
 function goToWeek(week) {
   const thisWeek = startOfWeek(todayKey());

@@ -82,6 +82,8 @@
     <footer class="footer">
       <p>記録はこのブラウザ（localStorage）にだけ保存されます。サーバーには送信しません。</p>
       <div class="footer-actions">
+        <button class="btn btn-ghost btn-small" type="button" data-action="import">JSONを読み込む</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
         <button class="btn btn-ghost btn-small" type="button" data-action="export">JSONで書き出す</button>
         <button class="btn btn-ghost btn-small btn-danger-ghost" type="button" data-action="clear">すべて消去</button>
       </div>
