@@ -294,6 +294,18 @@ textarea {
   color: var(--ink-2);
 }
 
+.field .optional {
+  margin-left: 4px;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.entry-meta .is-anonymous {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
 .label-row {
   display: flex;
   justify-content: space-between;

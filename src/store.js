@@ -1,6 +1,6 @@
 // localStorage への保存と読み込み。storage は差し替え可能（テストでは偽物を渡す）。
 
-import { isDateKey } from './core.js';
+import { isDateKey, hasMood } from './core.js';
 
 export const STORAGE_KEY = 'team-mood-log/v1';
 
@@ -8,15 +8,13 @@ export function serialize(entries) {
   return JSON.stringify({ version: 1, entries });
 }
 
+// 名前・ひとことは空文字、気分は null でもよい（どれも任意項目）
 const isStoredEntry = (e) =>
   e !== null &&
   typeof e === 'object' &&
   typeof e.id === 'string' &&
   typeof e.name === 'string' &&
-  e.name.trim() !== '' &&
-  Number.isInteger(e.mood) &&
-  e.mood >= 1 &&
-  e.mood <= 5 &&
+  (e.mood === null || hasMood(e.mood)) &&
   typeof e.note === 'string' &&
   isDateKey(e.date);
 

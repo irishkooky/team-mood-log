@@ -4,6 +4,7 @@ import {
   MOODS,
   LIMITS,
   moodLabel,
+  hasMood,
   toDateKey,
   addDays,
   dayOfWeek,
@@ -37,6 +38,9 @@ const state = {
   errors: {},
   flashId: null,
 };
+
+// 選択中の気分（もう一度押したら選択を外すために覚えておく）
+let checkedMood = null;
 
 function getLocalStorage() {
   try {
@@ -82,7 +86,18 @@ function faceSvg(mood, cls = '') {
   return `<svg class="face ${cls}" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="20" r="19" fill="var(--mood-${mood})"/><g fill="none" stroke="var(--face-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${FACE_PARTS[mood]}</g></svg>`;
 }
 
-const blankFace = `<svg class="face face-blank" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3.5 3.5"/><text x="20" y="25.5" text-anchor="middle" font-size="15" fill="currentColor">?</text></svg>`;
+const blankFaceSvg = (cls = '') =>
+  `<svg class="face face-blank ${cls}" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3.5 3.5"/><text x="20" y="25.5" text-anchor="middle" font-size="15" fill="currentColor">?</text></svg>`;
+const blankFace = blankFaceSvg();
+
+// 気分は任意項目。気分のない記録は「?」の顔と中立の色で出す
+const entryFace = (mood, cls = '') => (hasMood(mood) ? faceSvg(mood, cls) : blankFaceSvg(cls));
+const moodColor = (mood) => (hasMood(mood) ? `var(--mood-${mood})` : 'var(--surface-3)');
+const moodText = (mood) => moodLabel(mood) || '気分なし';
+
+// 名前も任意項目。「〇〇さんの」「名前なしの」
+const NO_NAME = '名前なし';
+const whose = (name) => (name ? `${name}さんの` : `${NO_NAME}の`);
 
 const ICONS = {
   prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg>',
@@ -171,6 +186,7 @@ function resetForm(keepName) {
   const date = form.elements.namedItem('date');
   date.value = todayKey();
   date.max = todayKey();
+  checkedMood = null;
   state.errors = {};
   renderErrors();
   updateComposerFace();
@@ -204,8 +220,10 @@ function submitEntry() {
   render();
   toast(
     replaced
-      ? `${entry.name}さんの${fmtWithDow(entry.date)}の記録を上書きしました`
-      : `${entry.name}さんの気分を記録しました`,
+      ? `${whose(entry.name)}${fmtWithDow(entry.date)}の記録を上書きしました`
+      : entry.name
+        ? `${entry.name}さんの気分を記録しました`
+        : `${fmtWithDow(entry.date)}の記録を追加しました`,
   );
 }
 
@@ -248,7 +266,7 @@ function weekNavHtml(s, today) {
 
 function statsHtml(s, point) {
   const mood = moodOf(s.average);
-  let delta = '<p class="stat-value is-muted">—</p><p class="stat-sub">この週の記録なし</p>';
+  let delta = `<p class="stat-value is-muted">—</p><p class="stat-sub">${s.count ? 'この週の気分の記録なし' : 'この週の記録なし'}</p>`;
   if (s.average !== null && point.delta === null) {
     delta = '<p class="stat-value is-muted">—</p><p class="stat-sub">前週の記録なし</p>';
   } else if (point.delta !== null) {
@@ -268,7 +286,7 @@ function statsHtml(s, point) {
       <div>
         <p class="stat-label">週の平均</p>
         <p class="stat-value big">${fmtAvg(s.average)}<small>/ 5</small></p>
-        <p class="stat-sub">${mood ? moodLabel(mood) : 'まだ記録がありません'}</p>
+        <p class="stat-sub">${mood ? moodLabel(mood) : s.count ? '気分の記録がありません' : 'まだ記録がありません'}</p>
       </div>
     </article>
     <article class="stat"><p class="stat-label">前週比</p>${delta}</article>
@@ -279,8 +297,9 @@ function statsHtml(s, point) {
 
 function cellHtml(entry, date, name, today) {
   if (entry) {
-    const head = `${name}・${fmtWithDow(date)}・${moodLabel(entry.mood)}`;
-    return `<span role="cell"><button type="button" class="hm-cell" style="--c: var(--mood-${entry.mood})" data-entry-id="${entry.id}" data-tip-head="${escapeHtml(head)}" data-tip="${escapeHtml(entry.note)}" aria-label="${escapeHtml(`${head}：${entry.note}`)}">${faceSvg(entry.mood, 'mini')}</button></span>`;
+    const head = `${name}・${fmtWithDow(date)}・${moodText(entry.mood)}`;
+    const label = entry.note ? `${head}：${entry.note}` : head;
+    return `<span role="cell"><button type="button" class="hm-cell" style="--c: ${moodColor(entry.mood)}" data-entry-id="${entry.id}" data-tip-head="${escapeHtml(head)}" data-tip="${escapeHtml(entry.note)}" aria-label="${escapeHtml(label)}">${entryFace(entry.mood, 'mini')}</button></span>`;
   }
   const future = date > today;
   return `<span role="cell"><span class="hm-cell ${future ? 'is-future' : 'is-empty'}" aria-label="${escapeHtml(`${name}・${fmtWithDow(date)}・${future ? 'これから' : '記録なし'}`)}"></span></span>`;
@@ -330,11 +349,11 @@ function distributionHtml(s) {
     .join('');
   const legend = MOODS.map((m, i) => {
     const n = s.distribution[i];
-    const pct = Math.round((n / s.count) * 100);
+    const pct = s.rated ? Math.round((n / s.rated) * 100) : 0;
     return `<li class="${n ? '' : 'is-zero'}">${faceSvg(m.value, 'tiny')}<span>${m.label}</span><b>${n}</b><small>${pct}%</small></li>`;
   }).join('');
   return `<article class="card">
-    <header class="card-head"><h3>気分の分布</h3><p class="muted">${s.count}件の内訳</p></header>
+    <header class="card-head"><h3>気分の分布</h3><p class="muted">${s.rated}件の内訳${s.rated < s.count ? `（気分なし${s.count - s.rated}件を除く）` : ''}</p></header>
     <div class="dist-bar" role="img" aria-label="${escapeHtml(MOODS.map((m, i) => `${m.label}${s.distribution[i]}件`).join('、'))}">${segments}</div>
     <ul class="dist-legend">${legend}</ul>
   </article>`;
@@ -366,13 +385,13 @@ function entriesHtml(s, today) {
       const items = s.entries
         .filter((e) => e.date === date)
         .map(
-          (e) => `<li class="entry" data-entry-id="${e.id}" style="--c: var(--mood-${e.mood})">
-            ${faceSvg(e.mood, 'entry-face')}
+          (e) => `<li class="entry" data-entry-id="${e.id}" style="--c: ${moodColor(e.mood)}">
+            ${entryFace(e.mood, 'entry-face')}
             <div class="entry-body">
-              <p class="entry-meta"><b>${escapeHtml(e.name)}</b><span class="tag">${moodLabel(e.mood)}</span></p>
-              <p class="entry-note">${escapeHtml(e.note)}</p>
+              <p class="entry-meta">${e.name ? `<b>${escapeHtml(e.name)}</b>` : `<b class="is-anonymous">${NO_NAME}</b>`}${hasMood(e.mood) ? `<span class="tag">${moodLabel(e.mood)}</span>` : ''}</p>
+              ${e.note ? `<p class="entry-note">${escapeHtml(e.note)}</p>` : ''}
             </div>
-            <button type="button" class="icon-btn icon-btn-quiet" data-action="delete" data-id="${e.id}" aria-label="${escapeHtml(`${e.name}さんの${fmtWithDow(e.date)}の記録を削除`)}">${ICONS.trash}</button>
+            <button type="button" class="icon-btn icon-btn-quiet" data-action="delete" data-id="${e.id}" aria-label="${escapeHtml(`${whose(e.name)}${fmtWithDow(e.date)}の記録を削除`)}">${ICONS.trash}</button>
           </li>`,
         )
         .join('');
@@ -506,7 +525,7 @@ const actions = {
     if (!removed) return;
     commit(entries);
     render();
-    toast(`${removed.name}さんの${fmtWithDow(removed.date)}の記録を削除しました`, {
+    toast(`${whose(removed.name)}${fmtWithDow(removed.date)}の記録を削除しました`, {
       label: '元に戻す',
       run: () => {
         const result = restoreEntry(state.entries, removed);
@@ -682,6 +701,19 @@ form.addEventListener('input', (event) => {
   if (state.errors[field]) {
     delete state.errors[field];
     renderErrors();
+  }
+});
+
+// 気分は任意なので、選んでいる気分をもう一度押すと選択を外せるようにする
+form.addEventListener('click', (event) => {
+  const radio = event.target.closest('input[name="mood"]');
+  if (!radio) return;
+  if (radio.value === checkedMood) {
+    radio.checked = false;
+    checkedMood = null;
+    updateComposerFace();
+  } else {
+    checkedMood = radio.value;
   }
 });
 
