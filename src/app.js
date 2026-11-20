@@ -10,6 +10,7 @@ import {
   dayOfWeek,
   startOfWeek,
   validateEntry,
+  oldestDateKey,
   upsertEntry,
   removeEntry,
   restoreEntry,
@@ -186,6 +187,7 @@ function resetForm(keepName) {
   const date = form.elements.namedItem('date');
   date.value = todayKey();
   date.max = todayKey();
+  date.min = oldestDateKey(todayKey());
   checkedMood = null;
   state.errors = {};
   renderErrors();

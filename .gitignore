@@ -2,3 +2,8 @@ node_modules/
 .DS_Store
 .env
 .env.*
+# 録画した動画はコミットしない（PR には gh の添付で載せる）
+*.webm
+*.mp4
+*.mov
+docs/test-videos/
