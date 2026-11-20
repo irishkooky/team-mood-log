@@ -12,6 +12,9 @@ export const MOODS = Object.freeze([
 
 export const LIMITS = Object.freeze({ name: 20, note: 80 });
 
+/** さかのぼって記録できる日数（今日を含めず 365 日前まで） */
+export const MAX_PAST_DAYS = 365;
+
 const DAY_MS = 86_400_000;
 const DATE_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -69,6 +72,11 @@ export function weekDays(key) {
 
 // ---- 入力の検証 ----
 
+/** フォームから記録できるいちばん古い日付 */
+export function oldestDateKey(today) {
+  return addDays(today, -MAX_PAST_DAYS);
+}
+
 export function normalizeName(name) {
   return String(name ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -102,6 +110,7 @@ export function validateEntry(input, { today }) {
   const date = input.date || today;
   if (!isDateKey(date)) errors.date = '日付の形式が正しくありません';
   else if (date > today) errors.date = '未来の日付には記録できません';
+  else if (date < oldestDateKey(today)) errors.date = `${MAX_PAST_DAYS}日より前の日付には記録できません`;
 
   let mood = null;
   if (input.mood !== '' && input.mood != null) {

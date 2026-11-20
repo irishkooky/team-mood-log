@@ -9,6 +9,7 @@ import {
   weekDays,
   toDateKey,
   validateEntry,
+  oldestDateKey,
   upsertEntry,
   removeEntry,
   restoreEntry,
@@ -100,6 +101,14 @@ describe('validateEntry', () => {
   test('未来の日付は記録できない', () => {
     const r = validateEntry({ ...valid, date: '2026-11-14' }, { today: TODAY });
     assert.match(r.errors.date, /未来/);
+  });
+
+  test('1年（365日）より前の日付は記録できない', () => {
+    assert.equal(oldestDateKey(TODAY), '2025-11-13');
+    assert.equal(validateEntry({ ...valid, date: '2025-11-13' }, { today: TODAY }).ok, true);
+    const r = validateEntry({ ...valid, date: '2025-11-12' }, { today: TODAY });
+    assert.equal(r.ok, false);
+    assert.match(r.errors.date, /365日より前/);
   });
 
   test('存在しない日付はエラー', () => {
