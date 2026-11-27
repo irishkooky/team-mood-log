@@ -5,7 +5,7 @@
   "description": "チームの気分ログ — ビルド不要の小さなWebアプリ",
   "type": "module",
   "scripts": {
-    "start": "npx --yes serve -l 3000 .",
+    "start": "npx --yes serve -l ${PORT:-3000} --no-port-switching .",
     "test": "node --test"
   }
 }
