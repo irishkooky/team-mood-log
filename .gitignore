@@ -2,6 +2,8 @@ node_modules/
 .DS_Store
 .env
 .env.*
+.playwright-cli/
+e2e/output/
 # 録画した動画はコミットしない（PR には gh の添付で載せる）
 *.webm
 *.mp4

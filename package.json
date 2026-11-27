@@ -6,6 +6,10 @@
   "type": "module",
   "scripts": {
     "start": "npx --yes serve -l ${PORT:-3000} --no-port-switching .",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "bash e2e/run-e2e.sh"
+  },
+  "devDependencies": {
+    "@playwright/cli": "^0.1.25"
   }
 }
