@@ -5,7 +5,11 @@
   "description": "チームの気分ログ — ビルド不要の小さなWebアプリ",
   "type": "module",
   "scripts": {
-    "start": "npx --yes serve -l 3000 .",
-    "test": "node --test"
+    "start": "npx --yes serve -l ${PORT:-3000} --no-port-switching .",
+    "test": "node --test",
+    "test:e2e": "bash e2e/run-e2e.sh"
+  },
+  "devDependencies": {
+    "@playwright/cli": "^0.1.25"
   }
 }
